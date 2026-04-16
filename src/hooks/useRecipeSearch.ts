@@ -1,4 +1,4 @@
-import { useCallback, useReducer } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import { searchRecipesByIngredients } from "../utils/api";
 import type { RecipeSummary } from "../types";
 
@@ -11,6 +11,8 @@ type SearchState = {
   hasSearched: boolean;
 };
 
+const STORAGE_KEY = "recipe_finder_search_state_v1";
+
 const initialSearchState: SearchState = {
   inputValue: "",
   ingredients: [],
@@ -20,13 +22,16 @@ const initialSearchState: SearchState = {
   hasSearched: false,
 };
 
+type PersistedSearchState = Pick<SearchState, "inputValue" | "ingredients" | "results" | "hasSearched">;
+
 type SearchAction =
   | { type: "SET_INPUT"; value: string }
   | { type: "ADD_INGREDIENT"; ingredient: string }
   | { type: "REMOVE_INGREDIENT"; index: number }
   | { type: "SEARCH_START" }
   | { type: "SEARCH_SUCCESS"; results: RecipeSummary[] }
-  | { type: "SEARCH_ERROR"; message: string };
+  | { type: "SEARCH_ERROR"; message: string }
+  | { type: "RESTORE"; value: PersistedSearchState };
 
 function searchReducer(state: SearchState, action: SearchAction): SearchState {
   switch (action.type) {
@@ -61,6 +66,14 @@ function searchReducer(state: SearchState, action: SearchAction): SearchState {
         hasSearched: true,
         results: [],
       };
+    case "RESTORE":
+      return {
+        ...state,
+        inputValue: action.value.inputValue,
+        ingredients: action.value.ingredients,
+        results: action.value.results,
+        hasSearched: action.value.hasSearched,
+      };
     default:
       return state;
   }
@@ -70,8 +83,54 @@ function isValidIngredientToken(value: string): boolean {
   return !/[0-9]/.test(value);
 }
 
+function readPersistedState(): PersistedSearchState | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+
+    const maybe = parsed as Partial<PersistedSearchState>;
+    if (!Array.isArray(maybe.ingredients) || !Array.isArray(maybe.results)) return null;
+
+    const ingredients = maybe.ingredients.filter((x): x is string => typeof x === "string");
+    const results = maybe.results.filter(
+      (r): r is RecipeSummary => !!r && typeof r === "object" && typeof (r as RecipeSummary).id === "number",
+    );
+
+    return {
+      inputValue: typeof maybe.inputValue === "string" ? maybe.inputValue : "",
+      ingredients,
+      results,
+      hasSearched: typeof maybe.hasSearched === "boolean" ? maybe.hasSearched : false,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistState(state: PersistedSearchState) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore quota / disabled storage errors; app still works without persistence.
+  }
+}
+
 export function useRecipeSearch() {
-  const [state, dispatch] = useReducer(searchReducer, initialSearchState);
+  const [state, dispatch] = useReducer(searchReducer, initialSearchState, (initial) => {
+    const restored = readPersistedState();
+    return restored ? searchReducer(initial, { type: "RESTORE", value: restored }) : initial;
+  });
+
+  useEffect(() => {
+    persistState({
+      inputValue: state.inputValue,
+      ingredients: state.ingredients,
+      results: state.results,
+      hasSearched: state.hasSearched,
+    });
+  }, [state.inputValue, state.ingredients, state.results, state.hasSearched]);
 
   const setInputValue = useCallback((value: string) => {
     dispatch({ type: "SET_INPUT", value });

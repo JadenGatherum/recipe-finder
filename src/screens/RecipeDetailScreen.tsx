@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { Spinner } from "../components/Spinner";
 import { useFavorites } from "../hooks/useFavorites";
 import type { Recipe } from "../types";
@@ -14,6 +14,14 @@ export function RecipeDetailScreen() {
   const { id } = useParams();
   const idNum = Number(id);
   const invalidId = id === undefined || !Number.isFinite(idNum);
+  const location = useLocation();
+
+  const from =
+    location.state && typeof location.state === "object" && "from" in location.state
+      ? (location.state as { from?: unknown }).from
+      : undefined;
+  const backTo = typeof from === "string" && from.length > 0 ? from : "/";
+  const backLabel = backTo === "/favorites" ? "Saved" : "Search";
 
   const { addToSaved, toggleStar, isSaved, isStarred } = useFavorites();
 
@@ -29,7 +37,7 @@ export function RecipeDetailScreen() {
     void (async () => {
       const res = await fetchRecipeById(idNum);
       if (cancelled) return;
-      if (res.ok) {
+      if (res.ok === true) {
         setRecipe(res.data);
         setError(null);
       } else {
@@ -50,7 +58,7 @@ export function RecipeDetailScreen() {
     setError(null);
     void (async () => {
       const res = await fetchRecipeById(idNum);
-      if (res.ok) {
+      if (res.ok === true) {
         setRecipe(res.data);
       } else {
         setError(res.error);
@@ -65,7 +73,7 @@ export function RecipeDetailScreen() {
       <div className="screen">
         <p className="error-banner">Invalid recipe id.</p>
         <p>
-          <Link to="/">Back to search</Link>
+          <Link to={backTo}>{`Back to ${backLabel.toLowerCase()}`}</Link>
         </p>
       </div>
     );
@@ -87,7 +95,7 @@ export function RecipeDetailScreen() {
           Try again
         </button>
         <p>
-          <Link to="/">Back to search</Link>
+          <Link to={backTo}>{`Back to ${backLabel.toLowerCase()}`}</Link>
         </p>
       </div>
     );
@@ -98,8 +106,8 @@ export function RecipeDetailScreen() {
 
   return (
     <div className="screen screen--detail">
-      <Link to="/" className="back-link">
-        ← Back to search
+      <Link to={backTo} className="back-link">
+        {`← Back to ${backLabel.toLowerCase()}`}
       </Link>
 
       <div className="detail-hero">

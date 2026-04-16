@@ -18,7 +18,8 @@ export async function searchRecipesByIngredients(ingredients: string[]): Promise
   if (!apiKey) {
     return { ok: false, error: "Missing VITE_SPOONACULAR_API_KEY in .env" };
   }
-  const ingredientsParam = ingredients.map((s) => s.trim()).filter(Boolean).join(",");
+  const ingredientTokens = ingredients.map((s) => s.trim()).filter(Boolean);
+  const ingredientsParam = ingredientTokens.join(",");
   if (!ingredientsParam) {
     return { ok: false, error: "Add at least one ingredient." };
   }
@@ -30,7 +31,7 @@ export async function searchRecipesByIngredients(ingredients: string[]): Promise
   if (result.ok === false) {
     return { ok: false, error: errToString(result.error) };
   }
-  const parsed = parseFindByIngredients(result.data);
+  const parsed = parseFindByIngredients(result.data, ingredientTokens.length);
   return { ok: true, data: parsed };
 }
 
@@ -50,13 +51,24 @@ export async function fetchRecipeById(id: number): Promise<Result<Recipe>> {
   return { ok: true, data: recipe };
 }
 
-function parseFindByIngredients(data: unknown): RecipeSummary[] {
+function parseFindByIngredients(data: unknown, requiredUsedCount: number): RecipeSummary[] {
   if (!Array.isArray(data)) return [];
   const out: RecipeSummary[] = [];
   for (const x of data) {
     if (typeof x !== "object" || x === null) continue;
     const o = x as Record<string, unknown>;
     if (typeof o.id !== "number" || typeof o.title !== "string") continue;
+
+    // Spoonacular returns `usedIngredientCount` / `usedIngredients`. Requiring that count to be
+    // at least the number of user-provided ingredients approximates "recipe contains all inputs".
+    const usedCount =
+      typeof o.usedIngredientCount === "number"
+        ? o.usedIngredientCount
+        : Array.isArray(o.usedIngredients)
+          ? o.usedIngredients.length
+          : 0;
+    if (requiredUsedCount > 0 && usedCount < requiredUsedCount) continue;
+
     out.push({
       id: o.id,
       title: o.title,
