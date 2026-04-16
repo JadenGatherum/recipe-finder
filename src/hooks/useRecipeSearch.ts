@@ -152,7 +152,7 @@ export function useRecipeSearch() {
     }
     dispatch({ type: "SEARCH_START" });
     const result = await searchRecipesByIngredients(state.ingredients);
-    if (!result.ok) {
+    if (result.ok === false) {
       dispatch({ type: "SEARCH_ERROR", message: result.error });
       return;
     }
