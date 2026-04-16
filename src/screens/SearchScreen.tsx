@@ -4,7 +4,7 @@ import { RecipeCard } from "../components/RecipeCard";
 import { Spinner } from "../components/Spinner";
 import { useFavorites } from "../hooks/useFavorites";
 import { useRecipeSearch } from "../hooks/useRecipeSearch";
-import TextInput from "../TextInput";
+import TextInput from "../components/TextInput";
 import { fetchRecipeById } from "../utils/api";
 import type { RecipeSummary } from "../types";
 
